@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="service_desc">Reads the Instagram screen to spot sponsored Reels, saves the advertiser username, and swipes to the next Reel. Only active while you press Start.</string>
+</resources>
