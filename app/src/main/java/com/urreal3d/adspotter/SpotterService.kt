@@ -88,12 +88,10 @@ class SpotterService : AccessibilityService() {
 
     private fun newReel(delayMs: Long) {
         val c = applicationContext
-        val minW = Store.int(c, "minW", 5).coerceAtLeast(2)
-        val maxW = Store.int(c, "maxW", 12).coerceAtLeast(minW)
-        var extra = 0L
-        if (Random.nextInt(100) < 8) extra = Random.nextLong(6_000L, 15_000L) // occasional longer look
+        val minW = Store.int(c, "chkMin", 2).coerceAtLeast(1)
+        val maxW = Store.int(c, "chkMax", 3).coerceAtLeast(minW)
         reelStart = SystemClock.elapsedRealtime() + delayMs
-        deadline = reelStart + Random.nextLong(minW * 1000L, maxW * 1000L + 1) + extra
+        deadline = reelStart + Random.nextLong(minW * 1000L, maxW * 1000L + 1)
         capturedThisReel = false
     }
 
@@ -114,7 +112,7 @@ class SpotterService : AccessibilityService() {
         }
         offCount = 0
 
-        if (now < reelStart) { h.postDelayed({ tick() }, 400L); return }
+        if (now < reelStart) { h.postDelayed({ tick() }, 250L); return }
 
         val nodes = flatten(root)
         if (nodes.any { it.text.length < 120 && BLOCK.containsMatchIn(it.text) }) {
@@ -128,17 +126,17 @@ class SpotterService : AccessibilityService() {
                 val isNew = Store.add(applicationContext, user)
                 capturedThisReel = true
                 status = "Ad: @$user" + if (isNew) " (new)" else " (seen before)"
-                deadline = minOf(deadline, now + 1_500L) // got it, move on
+                deadline = minOf(deadline, now + 350L) // got it, move on fast
             } else {
-                status = "Watching reel..."
+                status = "Checking reel for Ad label..."
             }
         }
 
         if (now >= deadline) {
             swipe()
-            newReel(1_200L + Random.nextLong(0L, 600L))
+            newReel(650L + Random.nextLong(0L, 250L))
         }
-        h.postDelayed({ tick() }, 1_000L)
+        h.postDelayed({ tick() }, 400L)
     }
 
     // -------------------------------------------------------------- detection
@@ -249,7 +247,7 @@ class SpotterService : AccessibilityService() {
         p.moveTo(x, y1)
         p.lineTo(x + Random.nextInt(-40, 40), y2)
         val g = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(p, 0L, Random.nextLong(220L, 380L)))
+            .addStroke(GestureDescription.StrokeDescription(p, 0L, Random.nextLong(140L, 240L)))
             .build()
         dispatchGesture(g, null, null)
     }

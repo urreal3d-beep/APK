@@ -4,7 +4,12 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Intent
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -55,10 +60,10 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
 
-        col.addView(text("Seconds per Reel (min / max) and session length (minutes)", 13f, false))
+        col.addView(text("Check time per Reel in seconds (min / max) and session length (minutes)", 13f, false))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        minW = num(Store.int(this, "minW", 5))
-        maxW = num(Store.int(this, "maxW", 12))
+        minW = num(Store.int(this, "chkMin", 2))
+        maxW = num(Store.int(this, "chkMax", 3))
         mins = num(Store.int(this, "mins", 30))
         row.addView(minW, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(maxW, LinearLayout.LayoutParams(0, -2, 1f))
@@ -84,7 +89,8 @@ class MainActivity : Activity() {
         list = text("", 14f, false)
         col.addView(list)
 
-        col.addView(btn("Share list (CSV)") { share(Store.csv(this)) })
+        col.addView(btn("Export CSV file (save to Downloads)") { exportCsv() })
+        col.addView(btn("Share CSV file") { shareCsvFile() })
         col.addView(btn("Copy usernames") {
             (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
                 .setPrimaryClip(ClipData.newPlainText("usernames", Store.text(this)))
@@ -134,9 +140,47 @@ class MainActivity : Activity() {
             l.takeLast(25).reversed().joinToString("\n") { "@${it.user}  x${it.count}" }
     }
 
+    private fun csvName() =
+        "adspotter_" + java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date()) + ".csv"
+
+    private fun exportCsv() {
+        if (Store.all(this).isEmpty()) { toast("Nothing captured yet"); return }
+        val name = csvName()
+        if (Build.VERSION.SDK_INT >= 29) {
+            val v = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, name)
+                put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)
+            if (uri == null) {
+                toast("Could not save file")
+            } else {
+                contentResolver.openOutputStream(uri)?.use { it.write(Store.csv(this).toByteArray()) }
+                toast("Saved to Downloads: $name")
+            }
+        } else {
+            shareCsvFile()
+        }
+    }
+
+    private fun shareCsvFile() {
+        if (Store.all(this).isEmpty()) { toast("Nothing captured yet"); return }
+        val dir = File(cacheDir, "exports").apply { mkdirs() }
+        val f = File(dir, csvName())
+        f.writeText(Store.csv(this))
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
+        val i = Intent(Intent.ACTION_SEND).apply {
+            type = "text/csv"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(i, "Share CSV"))
+    }
+
     private fun saveSettings() {
-        Store.setInt(this, "minW", minW.text.toString().toIntOrNull() ?: 5)
-        Store.setInt(this, "maxW", maxW.text.toString().toIntOrNull() ?: 12)
+        Store.setInt(this, "chkMin", minW.text.toString().toIntOrNull() ?: 2)
+        Store.setInt(this, "chkMax", maxW.text.toString().toIntOrNull() ?: 3)
         Store.setInt(this, "mins", mins.text.toString().toIntOrNull() ?: 30)
     }
 

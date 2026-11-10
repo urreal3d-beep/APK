@@ -46,10 +46,12 @@ object Store {
 
     fun text(c: Context): String = all(c).joinToString("\n") { it.user }
 
-    fun csv(c: Context): String =
-        "username,first_seen,times_seen\n" + all(c).joinToString("\n") {
-            "${it.user},${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(it.firstSeen))},${it.count}"
+    fun csv(c: Context): String {
+        val f = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+        return "username,profile_url,first_seen,times_seen\r\n" + all(c).joinToString("") {
+            "${it.user},https://www.instagram.com/${it.user}/,${f.format(java.util.Date(it.firstSeen))},${it.count}\r\n"
         }
+    }
 
     fun int(c: Context, key: String, def: Int): Int = sp(c).getInt(key, def)
 
