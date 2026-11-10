@@ -177,40 +177,63 @@ class SpotterService : AccessibilityService() {
         return true
     }
 
+    private fun isFollowBtn(t: String) =
+        t.equals("Follow", ignoreCase = true) || t.equals("Following", ignoreCase = true)
+
     private fun findAdUser(nodes: List<N>): String? {
         val dm = resources.displayMetrics
         fun dp(v: Int) = (v * dm.density).toInt()
+        val sw = dm.widthPixels
+        val sh = dm.heightPixels
 
-        val spons = nodes.filter {
-            it.visible && (isSponsoredExact(it.text) || isSponsoredExact(it.desc) ||
-                isSponsoredCombo(it.text) || isSponsoredCombo(it.desc))
+        // Ad label: "Ad" in the bottom-right corner, or "Sponsored" anywhere.
+        fun isAdLabel(n: N): Boolean {
+            if (!n.visible) return false
+            val exactAd = n.text.equals("Ad", true) || n.desc.equals("Ad", true)
+            if (exactAd && n.r.left > sw * 0.6 && n.r.top > sh * 0.6) return true
+            return isSponsoredExact(n.text) || isSponsoredExact(n.desc) ||
+                isSponsoredCombo(n.text) || isSponsoredCombo(n.desc)
         }
 
-        for (s in spons) {
-            // Case 1: "username • Sponsored" inside one node.
+        val labels = nodes.filter { isAdLabel(it) }
+        if (labels.isEmpty()) return null
+
+        // Case 1: "username • Sponsored" inside one node.
+        for (s in labels) {
             val combo = listOf(s.text, s.desc).firstOrNull { isSponsoredCombo(it) }
             if (combo != null) {
                 val first = combo.split("•", "·", "|", "\n").first().trim().removePrefix("@")
                 if (okUser(first)) return first
             }
+        }
 
-            // Case 2: username is a separate node above or on the same row as the label.
-            var best: N? = null
-            var bestScore = Int.MAX_VALUE
+        // Case 2: username sits left of the Follow button on the same row.
+        val follows = nodes.filter { it.visible && (isFollowBtn(it.text) || isFollowBtn(it.desc)) }
+        var best: N? = null
+        var bestScore = Int.MAX_VALUE
+        for (f in follows) {
             for (c in nodes) {
                 if (!c.visible || !okUser(c.text)) continue
-                val sameCol = Math.abs(c.r.left - s.r.left) < dp(40) &&
-                    c.r.bottom <= s.r.top + dp(8) && c.r.bottom >= s.r.top - dp(110)
-                val sameRow = Math.abs(c.r.centerY() - s.r.centerY()) < dp(20) &&
-                    c.r.right <= s.r.left + dp(12)
-                if (!sameCol && !sameRow) continue
-                var score = Math.abs(c.r.centerY() - s.r.centerY()) + Math.abs(c.r.left - s.r.left)
-                if (c.id.contains("username", true) || c.id.contains("author", true)) score -= dp(200)
+                if (Math.abs(c.r.centerY() - f.r.centerY()) > dp(30)) continue
+                if (c.r.right > f.r.left + dp(12)) continue
+                var score = f.r.left - c.r.right
+                if (c.id.contains("username", true) || c.id.contains("author", true)) score -= dp(300)
                 if (score < bestScore) { bestScore = score; best = c }
             }
-            if (best != null) return best.text.removePrefix("@")
         }
-        return null
+        if (best != null) return best.text.removePrefix("@")
+
+        // Case 3: username-like text near the label (above it or on its row).
+        for (s in labels) {
+            for (c in nodes) {
+                if (!c.visible || !okUser(c.text)) continue
+                val above = c.r.bottom <= s.r.top + dp(8) && c.r.bottom >= s.r.top - dp(140)
+                if (!above) continue
+                val score = Math.abs(c.r.centerY() - s.r.centerY()) + Math.abs(c.r.left - s.r.left)
+                if (score < bestScore) { bestScore = score; best = c }
+            }
+        }
+        return best?.text?.removePrefix("@")
     }
 
     // ---------------------------------------------------------------- gesture
